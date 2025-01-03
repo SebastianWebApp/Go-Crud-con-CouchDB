@@ -1,0 +1,118 @@
+name: Go crud con CouchDB
+
+on:
+  push:
+    branches:
+      - main  # Cambia según sea necesario
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout the repository code
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Install Docker and Docker Compose
+      - name: Install Docker and Docker Compose
+        run: |
+          # Actualizar el índice de paquetes
+          sudo apt-get update
+
+          # Instalar Docker si no está instalado
+          if ! command -v docker &> /dev/null; then
+            echo "Docker no encontrado. Instalando..."
+            sudo apt-get install -y docker.io
+          else
+            echo "Docker ya está instalado."
+          fi
+
+          # Instalar Docker Compose si no está instalado
+          if ! command -v docker-compose &> /dev/null; then
+            echo "Docker Compose no encontrado. Instalando..."
+            sudo curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+            sudo chmod +x /usr/local/bin/docker-compose
+          else
+            echo "Docker Compose ya está instalado."
+          fi
+
+          # Verificar las versiones de Docker y Docker Compose
+          docker --version
+          docker-compose --version
+
+      # Log in to Docker Hub
+      - name: Log in to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}  # Asegúrate de que los secretos estén configurados
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          
+
+      # Build and push Docker images using Docker Compose
+      - name: Build and push Docker images with Docker Compose
+        run: |
+          # Construir las imágenes con Docker Compose
+          docker-compose -f docker-compose.yml build
+
+          # Subir las imágenes a Docker Hub
+          docker-compose -f docker-compose.yml push
+
+
+
+
+
+  deploy-to-ec2:
+      needs: build-and-push
+      runs-on: ubuntu-latest
+      steps:
+        - name: Trigger redeploy on EC2
+          uses: appleboy/ssh-action@master
+          with:
+            host: ${{ secrets.HOST_DNS }}
+            username: ${{ secrets.USERNAME }}
+            key: ${{ secrets.EC2_SSH_KEY }}
+            script: |
+              echo "Conectando a ${{ secrets.HOST_DNS }} para redeploy"
+
+
+              
+              # Descargar las imágenes desde Docker Hub
+              docker pull couchdb:latest
+              docker pull sebastianwebapp/go_couchdb_app:latest
+
+
+              # Asegurarse de tener la red y volumen creados
+              docker network create app-network || true
+              docker volume create couchdb_data || true
+
+              # Detener y eliminar contenedores antiguos
+              docker stop couchdb || true
+              docker rm couchdb || true
+              
+              docker stop go_app || true
+              docker rm go_app || true
+
+             
+  
+              # Iniciar el contenedor de couchdb
+              docker run -d --name couchdb \
+                --network app-network \
+                -v couchdb_data:/opt/couchdb/data \
+                -e COUCHDB_USER=admin \
+                -e COUCHDB_PASSWORD=root \
+                -p 5984:5984 \
+                --restart always \
+                couchdb:latest
+
+
+              # Iniciar el contenedor de go_app
+              docker run -d --name go_app \
+                --network app-network \
+                --restart always \
+                -p 4005:4005 \
+                sebastianwebapp/go_couchdb_app:latest
+  
+
+  
+              echo "Despliegue completado exitosamente"
+              docker ps
