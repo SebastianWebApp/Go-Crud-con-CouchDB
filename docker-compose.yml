@@ -1,0 +1,27 @@
+version: "3.9"
+services:
+  couchdb:
+    image: couchdb:3.3
+    container_name: couchdb
+    restart: always
+    ports:
+      - "5984:5984"
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=root
+    volumes:
+      - couchdb_data:/opt/couchdb/data
+
+  go_app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sebastianwebapp/go_couchdb_app
+    restart: always
+    ports:
+      - "4005:4005"
+    depends_on:
+      - couchdb
+
+volumes:
+  couchdb_data:
