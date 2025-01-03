@@ -14,6 +14,12 @@ import (
 	"github.com/go-kivik/kivik/v3"
 )
 
+// Estructura para la respuesta estándar
+type Response struct {
+	Estado    bool        `json:"Estado"`
+	Respuesta interface{} `json:"Respuesta"` // Cambiar a `interface{}` para poder manejar cualquier tipo de dato
+}
+
 func main() {
 	// Cargar el archivo .env
 	if err := godotenv.Load(); err != nil {
@@ -93,11 +99,19 @@ func insertDocument(w http.ResponseWriter, r *http.Request, client *kivik.Client
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		http.Error(w, "Error al leer el documento", http.StatusBadRequest)
+		json.NewEncoder(w).Encode(Response{
+			Estado:    false,
+			Respuesta: "Error al leer el documento",
+		})
 		return
 	}
 
 	if request.ID == "" {
 		http.Error(w, "El campo 'id' es requerido", http.StatusBadRequest)
+		json.NewEncoder(w).Encode(Response{
+			Estado:    false,
+			Respuesta: "El campo 'id' es requerido",
+		})
 		return
 	}
 
@@ -105,11 +119,18 @@ func insertDocument(w http.ResponseWriter, r *http.Request, client *kivik.Client
 	_, err := db.Put(r.Context(), request.ID, request.Document)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error al insertar documento: %v", err), http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(Response{
+			Estado:    false,
+			Respuesta: fmt.Sprintf("Error al insertar documento: %v", err),
+		})
 		return
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	fmt.Fprintf(w, "Documento insertado con ID: %s\n", request.ID)
+	json.NewEncoder(w).Encode(Response{
+		Estado:    true,
+		Respuesta: fmt.Sprintf("Documento insertado con ID: %s", request.ID),
+	})
 }
 
 // Función para obtener todos los documentos
@@ -118,6 +139,10 @@ func getAllDocuments(w http.ResponseWriter, r *http.Request, client *kivik.Clien
 	rows, err := db.AllDocs(r.Context(), map[string]interface{}{"include_docs": true})
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error al obtener documentos: %v", err), http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(Response{
+			Estado:    false,
+			Respuesta: fmt.Sprintf("Error al obtener documentos: %v", err),
+		})
 		return
 	}
 	defer rows.Close()
@@ -127,20 +152,29 @@ func getAllDocuments(w http.ResponseWriter, r *http.Request, client *kivik.Clien
 		var doc map[string]interface{}
 		if err := rows.ScanDoc(&doc); err != nil {
 			http.Error(w, fmt.Sprintf("Error al leer un documento: %v", err), http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(Response{
+				Estado:    false,
+				Respuesta: fmt.Sprintf("Error al leer un documento: %v", err),
+			})
 			return
 		}
 		documents = append(documents, doc)
 	}
 	if err := rows.Err(); err != nil {
 		http.Error(w, fmt.Sprintf("Error al procesar los documentos: %v", err), http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(Response{
+			Estado:    false,
+			Respuesta: fmt.Sprintf("Error al procesar los documentos: %v", err),
+		})
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(documents); err != nil {
-		http.Error(w, fmt.Sprintf("Error al codificar la respuesta JSON: %v", err), http.StatusInternalServerError)
-	}
+	json.NewEncoder(w).Encode(Response{
+		Estado:    true,
+		Respuesta: documents,
+	})
 }
 
 // Función para obtener un documento por ID
@@ -149,14 +183,19 @@ func getDocumentByID(w http.ResponseWriter, r *http.Request, client *kivik.Clien
 	doc := map[string]interface{}{}
 	if err := db.Get(r.Context(), id).ScanDoc(&doc); err != nil {
 		http.Error(w, fmt.Sprintf("Error al obtener el documento: %v", err), http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(Response{
+			Estado:    false,
+			Respuesta: fmt.Sprintf("Error al obtener el documento: %v", err),
+		})
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(doc); err != nil {
-		http.Error(w, fmt.Sprintf("Error al codificar la respuesta JSON: %v", err), http.StatusInternalServerError)
-	}
+	json.NewEncoder(w).Encode(Response{
+		Estado:    true,
+		Respuesta: doc,
+	})
 }
 
 // Función para actualizar un documento por ID
@@ -168,12 +207,20 @@ func updateDocumentByID(w http.ResponseWriter, r *http.Request, client *kivik.Cl
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		http.Error(w, "Error al leer el cuerpo de la solicitud", http.StatusBadRequest)
+		json.NewEncoder(w).Encode(Response{
+			Estado:    false,
+			Respuesta: "Error al leer el cuerpo de la solicitud",
+		})
 		return
 	}
 
 	// Validar el ID del documento
 	if request.ID == "" {
 		http.Error(w, "El campo 'id' es requerido", http.StatusBadRequest)
+		json.NewEncoder(w).Encode(Response{
+			Estado:    false,
+			Respuesta: "El campo 'id' es requerido",
+		})
 		return
 	}
 
@@ -185,6 +232,10 @@ func updateDocumentByID(w http.ResponseWriter, r *http.Request, client *kivik.Cl
 	var currentDoc map[string]interface{}
 	if err := doc.ScanDoc(&currentDoc); err != nil {
 		http.Error(w, fmt.Sprintf("Error al obtener el documento: %v", err), http.StatusNotFound)
+		json.NewEncoder(w).Encode(Response{
+			Estado:    false,
+			Respuesta: fmt.Sprintf("Error al obtener el documento: %v", err),
+		})
 		return
 	}
 
@@ -192,6 +243,10 @@ func updateDocumentByID(w http.ResponseWriter, r *http.Request, client *kivik.Cl
 	rev, ok := currentDoc["_rev"].(string)
 	if !ok {
 		http.Error(w, "No se pudo obtener la revisión del documento", http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(Response{
+			Estado:    false,
+			Respuesta: "No se pudo obtener la revisión del documento",
+		})
 		return
 	}
 
@@ -202,11 +257,18 @@ func updateDocumentByID(w http.ResponseWriter, r *http.Request, client *kivik.Cl
 	_, err := db.Put(r.Context(), request.ID, request.Document)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error al actualizar documento: %v", err), http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(Response{
+			Estado:    false,
+			Respuesta: fmt.Sprintf("Error al actualizar documento: %v", err),
+		})
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "Documento con ID %s actualizado exitosamente\n", request.ID)
+	json.NewEncoder(w).Encode(Response{
+		Estado:    true,
+		Respuesta: fmt.Sprintf("Documento con ID %s actualizado exitosamente", request.ID),
+	})
 }
 
 // Función para eliminar un documento por ID
@@ -215,6 +277,10 @@ func deleteDocumentByID(w http.ResponseWriter, r *http.Request, client *kivik.Cl
 	id := r.URL.Query().Get("id")
 	if id == "" {
 		http.Error(w, "El campo 'id' es requerido", http.StatusBadRequest)
+		json.NewEncoder(w).Encode(Response{
+			Estado:    false,
+			Respuesta: "El campo 'id' es requerido",
+		})
 		return
 	}
 
@@ -226,6 +292,10 @@ func deleteDocumentByID(w http.ResponseWriter, r *http.Request, client *kivik.Cl
 	var currentDoc map[string]interface{}
 	if err := doc.ScanDoc(&currentDoc); err != nil {
 		http.Error(w, fmt.Sprintf("Error al obtener el documento: %v", err), http.StatusNotFound)
+		json.NewEncoder(w).Encode(Response{
+			Estado:    false,
+			Respuesta: fmt.Sprintf("Error al obtener el documento: %v", err),
+		})
 		return
 	}
 
@@ -233,15 +303,26 @@ func deleteDocumentByID(w http.ResponseWriter, r *http.Request, client *kivik.Cl
 	rev, ok := currentDoc["_rev"].(string)
 	if !ok {
 		http.Error(w, "No se pudo obtener la revisión del documento", http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(Response{
+			Estado:    false,
+			Respuesta: "No se pudo obtener la revisión del documento",
+		})
 		return
 	}
 
 	// Eliminar el documento usando el ID y _rev
 	if _, err := db.Delete(r.Context(), id, rev); err != nil {
-		http.Error(w, fmt.Sprintf("Error al eliminar el documento: %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Error al eliminar documento: %v", err), http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(Response{
+			Estado:    false,
+			Respuesta: fmt.Sprintf("Error al eliminar documento: %v", err),
+		})
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "Documento con ID %s eliminado exitosamente\n", id)
+	json.NewEncoder(w).Encode(Response{
+		Estado:    true,
+		Respuesta: fmt.Sprintf("Documento con ID %s eliminado exitosamente", id),
+	})
 }
