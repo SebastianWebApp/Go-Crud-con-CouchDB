@@ -16,7 +16,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: sebastianwebapp/go_couchdb_app:latest
+    image: sebastianwebapp/go_couchdb_app:latest
+    container_name: go_app
     restart: always
     ports:
       - "4005:4005"
